@@ -1,66 +1,121 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, Shield, Lock, Mail, Check } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import { ShieldCheck, User, Zap, Lock, X, Mail } from 'lucide-react';
+import { UserRole } from '@/types/privacy';
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onLoginSuccess: (user: { name: string; email: string }) => void;
 }
 
-export function AuthModal({ isOpen, onClose, onLoginSuccess }: AuthModalProps) {
-  const [email, setEmail] = useState('');
-  const [name, setName] = useState('');
-  const [isSignUp, setIsSignUp] = useState(false);
+export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
+  const { login } = useAuth();
+  const [emailInput, setEmailInput] = useState('');
+  const [nameInput, setNameInput] = useState('');
 
   if (!isOpen) return null;
 
-  const handleGoogleLogin = () => {
-    onLoginSuccess({
-      name: '김민준',
-      email: 'mjayj9@gmail.com'
-    });
+  const handleSelectRole = (role: UserRole) => {
+    login(role);
     onClose();
   };
 
-  const handleEmailSubmit = (e: React.FormEvent) => {
+  const handleCustomEmailSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim()) return;
-    onLoginSuccess({
-      name: name.trim() || email.split('@')[0],
-      email: email.trim()
-    });
+    if (!emailInput.trim()) return;
+    const role: UserRole = emailInput.includes('admin') ? 'ADMIN' : emailInput.includes('pro') ? 'PRO' : 'FREE';
+    login(role, emailInput.trim(), nameInput.trim() || emailInput.split('@')[0]);
+    onClose();
+  };
+
+  const handleGoogleLogin = () => {
+    login('FREE', 'mjayj9@gmail.com', '김민준');
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl border border-[#E2E8F0] relative">
-        <div className="flex items-center justify-between pb-4 border-b border-[#EDF2F7]">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-[#EBF8F0] text-[#4A7C59] flex items-center justify-center">
-              <Shield className="w-4 h-4" />
-            </div>
-            <h3 className="font-extrabold text-base sm:text-lg text-[#1A202C]">
-              {isSignUp ? '개약풀 회원가입' : '개약풀 로그인'}
-            </h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+      <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl p-6 sm:p-7 border border-gray-100">
+        <button
+          id="btn-close-auth-modal"
+          onClick={onClose}
+          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 p-1.5 rounded-xl hover:bg-gray-100 transition-colors"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
+        <div className="text-center mb-5">
+          <div className="inline-flex p-3 rounded-2xl bg-emerald-50 text-[#4A7C59] mb-2 border border-emerald-100">
+            <ShieldCheck className="w-6 h-6 text-[#4A7C59]" />
           </div>
+          <h3 className="text-lg sm:text-xl font-black text-[#1A202C]">개약풀 로그인 & 데모 권한 선택</h3>
+          <p className="text-xs text-[#718096] mt-1">
+            원클릭으로 원하는 권한 계정을 선택하거나 Google 계정으로 로그인하세요.
+          </p>
+        </div>
+
+        {/* Quick 1-Click Demo Roles */}
+        <div className="space-y-2.5 mb-5">
           <button
-            id="btn-close-auth-modal"
-            onClick={onClose}
-            className="p-1.5 rounded-xl text-[#A0AEC0] hover:text-[#4A5568]"
+            id="btn-role-free"
+            onClick={() => handleSelectRole('FREE')}
+            className="w-full flex items-center justify-between p-3 rounded-2xl border border-gray-200 hover:border-[#4A7C59] hover:bg-emerald-50/30 transition-all text-left group"
           >
-            <X className="w-5 h-5" />
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-gray-100 flex items-center justify-center text-gray-600">
+                <User className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-xs sm:text-sm font-bold text-gray-800">일반 회원 (FREE)</p>
+                <p className="text-[11px] text-gray-500">기본 요약, 6대 라벨 및 독소 조항 탐지</p>
+              </div>
+            </div>
+            <span className="text-[11px] bg-gray-100 text-gray-600 font-bold px-2.5 py-1 rounded-lg">선택</span>
+          </button>
+
+          <button
+            id="btn-role-pro"
+            onClick={() => handleSelectRole('PRO')}
+            className="w-full flex items-center justify-between p-3 rounded-2xl border border-emerald-300 bg-emerald-50/20 hover:bg-emerald-50/60 transition-all text-left"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-emerald-100 text-[#4A7C59] flex items-center justify-center">
+                <Zap className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-xs sm:text-sm font-bold text-[#4A7C59]">프로 회원 (PRO)</p>
+                <p className="text-[11px] text-gray-500">세부 평가지표, Diff 비교, PDF 다운로드 잠금해제</p>
+              </div>
+            </div>
+            <span className="text-[11px] bg-[#4A7C59] text-white font-bold px-2.5 py-1 rounded-lg">추천</span>
+          </button>
+
+          <button
+            id="btn-role-admin"
+            onClick={() => handleSelectRole('ADMIN')}
+            className="w-full flex items-center justify-between p-3 rounded-2xl border border-purple-200 bg-purple-50/20 hover:bg-purple-50/50 transition-all text-left"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center">
+                <Lock className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-xs sm:text-sm font-bold text-purple-900">시스템 관리자 (ADMIN)</p>
+                <p className="text-[11px] text-gray-500">PRO의 모든 기능 + 관리자 보안 콘솔 권한</p>
+              </div>
+            </div>
+            <span className="text-[11px] bg-purple-600 text-white font-bold px-2.5 py-1 rounded-lg">Admin</span>
           </button>
         </div>
 
-        <div className="mt-5 space-y-4">
-          {/* Google One-Click Login Button */}
+        {/* Google Login */}
+        <div className="pt-3 border-t border-gray-100">
           <button
-            id="btn-google-login"
+            id="btn-google-signin"
             onClick={handleGoogleLogin}
-            className="w-full py-2.5 px-4 rounded-2xl border border-[#CBD5E0] bg-white hover:bg-[#F8F9FA] text-xs font-bold text-[#2D3748] flex items-center justify-center gap-2.5 transition-all shadow-2xs"
+            className="w-full py-2.5 px-4 rounded-xl border border-gray-200 hover:bg-gray-50 text-xs font-bold text-[#2D3748] flex items-center justify-center gap-2 transition-all shadow-2xs"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24">
               <path
@@ -82,58 +137,8 @@ export function AuthModal({ isOpen, onClose, onLoginSuccess }: AuthModalProps) {
             </svg>
             <span>Google 계정으로 계속하기</span>
           </button>
-
-          <div className="flex items-center my-3">
-            <div className="flex-1 border-t border-[#E2E8F0]"></div>
-            <span className="px-3 text-[11px] text-[#A0AEC0]">또는 이메일로 시작</span>
-            <div className="flex-1 border-t border-[#E2E8F0]"></div>
-          </div>
-
-          <form onSubmit={handleEmailSubmit} className="space-y-3">
-            {isSignUp && (
-              <div>
-                <label className="block text-xs font-bold text-[#4A5568] mb-1">이름 / 닉네임</label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="홍길동"
-                  className="w-full px-3.5 py-2 rounded-xl bg-[#F8F9FA] border border-[#E2E8F0] text-xs text-[#1A202C]"
-                />
-              </div>
-            )}
-
-            <div>
-              <label className="block text-xs font-bold text-[#4A5568] mb-1">이메일 주소</label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="name@example.com"
-                className="w-full px-3.5 py-2 rounded-xl bg-[#F8F9FA] border border-[#E2E8F0] text-xs text-[#1A202C]"
-              />
-            </div>
-
-            <button
-              id="btn-email-auth-submit"
-              type="submit"
-              className="w-full py-2.5 rounded-2xl bg-[#4A7C59] hover:bg-[#3B6548] text-white text-xs font-bold shadow-xs transition-colors"
-            >
-              {isSignUp ? '계정 만들기' : '이메일로 로그인'}
-            </button>
-          </form>
-
-          <div className="text-center pt-2">
-            <button
-              onClick={() => setIsSignUp(!isSignUp)}
-              className="text-xs text-[#4A7C59] hover:underline font-semibold"
-            >
-              {isSignUp ? '이미 계정이 있으신가요? 로그인' : '계정이 없으신가요? 무료 회원가입'}
-            </button>
-          </div>
         </div>
       </div>
     </div>
   );
-}
+};

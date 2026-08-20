@@ -2,5 +2,7 @@
   "name": "개약풀 - 개인정보 약관 AI 분석 (PrivacyHelper)",
   "description": "복잡한 개인정보 처리방침과 이용약관을 AI로 분석하여 3줄 요약, 독소 조항 탐지, 권리 행사 가이드, 약관 개정 변경점 비교를 제공하는 대시보드 웹 서비스",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

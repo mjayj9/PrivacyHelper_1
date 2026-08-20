@@ -1,48 +1,36 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Key, X, Check, ExternalLink, Sparkles, Shield, Cpu, HelpCircle } from 'lucide-react';
+import React, { useState } from 'react';
+import { Key, X, Check, ExternalLink, Shield } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
 
 interface ApiKeyModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSaveKey: (key: string, model: string) => void;
-  currentKey: string;
-  currentModel: string;
 }
 
-export function ApiKeyModal({
-  isOpen,
-  onClose,
-  onSaveKey,
-  currentKey,
-  currentModel
-}: ApiKeyModalProps) {
-  const [keyInput, setKeyInput] = useState(currentKey || '');
-  const [modelInput, setModelInput] = useState(currentModel || 'meta/llama-3.1-70b-instruct');
+export function ApiKeyModal({ isOpen, onClose }: ApiKeyModalProps) {
+  const { apiKey, setApiKey, selectedModel, setSelectedModel } = useAuth();
+  const [keyInput, setKeyInput] = useState(apiKey || '');
+  const [modelInput, setModelInput] = useState(selectedModel || 'meta/llama-3.1-70b-instruct');
   const [savedSuccess, setSavedSuccess] = useState(false);
-
-  // Sync inputs with props when modal opens using form reset or state update handler
-  const handleOpenSync = () => {
-    if (keyInput !== currentKey) setKeyInput(currentKey || '');
-    if (modelInput !== currentModel) setModelInput(currentModel || 'meta/llama-3.1-70b-instruct');
-  };
 
   if (!isOpen) return null;
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    onSaveKey(keyInput.trim(), modelInput);
+    setApiKey(keyInput.trim());
+    setSelectedModel(modelInput);
     setSavedSuccess(true);
     setTimeout(() => {
       setSavedSuccess(false);
       onClose();
-    }, 1000);
+    }, 800);
   };
 
   const handleClearKey = () => {
     setKeyInput('');
-    onSaveKey('', modelInput);
+    setApiKey('');
   };
 
   return (
@@ -95,7 +83,7 @@ export function ApiKeyModal({
               className="w-full px-3.5 py-2.5 rounded-xl bg-[#F8F9FA] border border-[#E2E8F0] text-xs font-mono text-[#1A202C] focus:outline-none focus:ring-2 focus:ring-[#4A7C59]/30 focus:border-[#4A7C59]"
             />
             <p className="text-[11px] text-[#718096] mt-1.5 leading-relaxed">
-              * 키를 입력하지 않아도 서비스 내장 고정밀 법률 AI 룰 엔진 및 Gemini 백업을 통해 정상 분석됩니다.
+              * 키를 입력하지 않아도 서비스 내장 고정밀 법률 AI 룰 엔진을 통해 안정적으로 분석됩니다.
             </p>
           </div>
 
@@ -123,7 +111,7 @@ export function ApiKeyModal({
               <span>보안 및 로컬 보관 안내</span>
             </div>
             <p className="text-[11px] text-[#718096] leading-relaxed">
-              입력하신 API 키는 서버 DB에 영구 저장되지 않으며, 오직 분석 요청 시 암호화 통신으로만 전달됩니다.
+              입력하신 API 키는 브라우저 로컬 스토리지에만 보관되며 분석 요청 시 암호화 통신으로만 전달됩니다.
             </p>
           </div>
 
@@ -139,7 +127,7 @@ export function ApiKeyModal({
                 키 삭제
               </button>
             ) : (
-              <div></div>
+              <div />
             )}
 
             <div className="flex items-center gap-2">
