@@ -429,8 +429,24 @@ export function HeroInput({ onAnalyze, isLoading, onOpenApiKey }: HeroInputProps
               </div>
             </div>
 
-            {/* Action Buttons: Clear & Submit */}
-            <div className="flex items-center gap-2 w-full sm:w-auto">
+            {/* Action Buttons: Clear, Instant PDF Example & Submit */}
+            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+              <button
+                id="btn-instant-pdf-example"
+                type="button"
+                onClick={() => {
+                  const examplePreset = SAMPLE_TERMS_PRESETS[1] || SAMPLE_TERMS_PRESETS[0]; // Global SNS AI / Ecommerce
+                  handlePresetSelect(examplePreset);
+                  onAnalyze(examplePreset.text, `[PDF 분석 예시] ${examplePreset.title}`, 'sample_privacy_terms.pdf');
+                }}
+                disabled={isLoading || isParsingPdf}
+                className="px-3.5 py-3 rounded-2xl border border-[#4A7C59] bg-[#EBF8F0] text-xs font-bold text-[#2F855A] hover:bg-[#DDF4E5] transition-all flex items-center justify-center gap-1.5 shadow-2xs"
+                title="기다리지 않고 즉시 PDF 분석 결과물 보기"
+              >
+                <FileText className="w-4 h-4 text-[#38A169]" />
+                <span>📄 PDF 결과물 예시 즉시 보기</span>
+              </button>
+
               {inputText && (
                 <button
                   id="btn-clear-input"

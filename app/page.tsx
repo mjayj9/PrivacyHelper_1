@@ -53,7 +53,7 @@ function PrivacyHelperApp() {
         rawText: text
       };
 
-      // 4.8s delay to allow 5-step progress and native sponsor ad review
+      // Fast transition without blocking
       setTimeout(() => {
         setCurrentResult(analysisData);
         setIsLoading(false);
@@ -67,7 +67,7 @@ function PrivacyHelperApp() {
             colors: ['#4A7C59', '#38A169', '#68D391']
           });
         }
-      }, 4800);
+      }, 1500);
     } catch (err) {
       console.warn('Analysis fallback:', err);
       setTimeout(() => {
@@ -80,7 +80,7 @@ function PrivacyHelperApp() {
         setCurrentResult(fallback);
         setIsLoading(false);
         window.scrollTo({ top: 0, behavior: 'smooth' });
-      }, 4800);
+      }, 1500);
     }
   };
 

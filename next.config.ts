@@ -29,6 +29,10 @@ const nextConfig: NextConfig = {
         ignored: /.*/,
       };
     }
+    // Disable disk pack cache in dev to avoid container fs pack.gz race conditions
+    if (dev) {
+      config.cache = false;
+    }
     return config;
   },
 };
