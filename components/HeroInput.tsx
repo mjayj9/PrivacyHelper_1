@@ -77,16 +77,28 @@ export function HeroInput({ onAnalyze, isLoading, onOpenApiKey }: HeroInputProps
           body: formData,
         });
 
+        const contentType = response.headers.get('content-type') || '';
         if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.error || 'PDF 텍스트 추출에 실패했습니다.');
+          let errorMsg = 'PDF 텍스트 추출에 실패했습니다.';
+          if (contentType.includes('application/json')) {
+            const errData = await response.json().catch(() => ({}));
+            if (errData.error) errorMsg = errData.error;
+          }
+          throw new Error(errorMsg);
         }
 
-        const data = await response.json();
-        if (data.text) {
-          setInputText(data.text);
-          if (data.title) {
-            setTermTitle(data.title);
+        if (contentType.includes('application/json')) {
+          const data = await response.json();
+          if (data.text) {
+            setInputText(data.text);
+            if (data.title) {
+              setTermTitle(data.title);
+            }
+          }
+        } else {
+          const rawRespText = await response.text();
+          if (rawRespText) {
+            setInputText(rawRespText);
           }
         }
       } catch (err: any) {

@@ -1,14 +1,19 @@
 'use client';
 
-import React, { createContext, useContext, useSyncExternalStore } from 'react';
+import React, { createContext, useContext, useState, useEffect, useSyncExternalStore } from 'react';
 import { User, UserRole } from '@/types/privacy';
 
 interface AuthContextType {
   user: User | null;
   apiKey: string;
   selectedModel: string;
+  isServerConfigured: boolean;
+  serverKeyMasked: string;
+  serverModel: string;
   setApiKey: (key: string) => void;
   setSelectedModel: (model: string) => void;
+  saveServerApiKey: (key: string, model?: string) => Promise<{ success: boolean; message?: string }>;
+  refreshServerStatus: () => Promise<void>;
   login: (role: UserRole, customEmail?: string, customName?: string) => void;
   logout: () => void;
   upgradeToPro: () => void;
@@ -59,20 +64,81 @@ const getApiKeySnapshot = (): string => {
 
 const getModelSnapshot = (): string => {
   try {
-    return localStorage.getItem('privacyhelper_model') || 'meta/llama-3.1-70b-instruct';
+    return localStorage.getItem('privacyhelper_model') || 'z-ai/glm-5.2';
   } catch {
-    return 'meta/llama-3.1-70b-instruct';
+    return 'z-ai/glm-5.2';
   }
 };
 
 const getServerUserSnapshot = (): User | null => null;
 const getServerApiKeySnapshot = (): string => '';
-const getServerModelSnapshot = (): string => 'meta/llama-3.1-70b-instruct';
+const getServerModelSnapshot = (): string => 'z-ai/glm-5.2';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const user = useSyncExternalStore(subscribeToStorage, getUserSnapshot, getServerUserSnapshot);
   const apiKey = useSyncExternalStore(subscribeToStorage, getApiKeySnapshot, getServerApiKeySnapshot);
   const selectedModel = useSyncExternalStore(subscribeToStorage, getModelSnapshot, getServerModelSnapshot);
+
+  const [isServerConfigured, setIsServerConfigured] = useState(false);
+  const [serverKeyMasked, setServerKeyMasked] = useState('');
+  const [serverModel, setServerModel] = useState('z-ai/glm-5.2');
+
+  const refreshServerStatus = async () => {
+    try {
+      const res = await fetch('/api/admin/config');
+      if (res.ok) {
+        const json = await res.json();
+        if (json.data) {
+          setIsServerConfigured(Boolean(json.data.isConfigured));
+          setServerKeyMasked(json.data.keyMasked || '');
+          setServerModel(json.data.selectedModel || 'z-ai/glm-5.2');
+        }
+      }
+    } catch (err) {
+      console.warn('Could not check server AI config status:', err);
+    }
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchStatus = async () => {
+      try {
+        const res = await fetch('/api/admin/config');
+        if (res.ok) {
+          const json = await res.json();
+          if (json.data && isMounted) {
+            setIsServerConfigured(Boolean(json.data.isConfigured));
+            setServerKeyMasked(json.data.keyMasked || '');
+            setServerModel(json.data.selectedModel || 'z-ai/glm-5.2');
+          }
+        }
+      } catch (err) {
+        console.warn('Could not check server AI config status:', err);
+      }
+    };
+    fetchStatus();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const saveServerApiKey = async (key: string, model: string = 'z-ai/glm-5.2') => {
+    try {
+      const res = await fetch('/api/admin/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: key, model })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        await refreshServerStatus();
+        return { success: true, message: data.message };
+      }
+      return { success: false, message: data.error || '저장 실패' };
+    } catch (err: any) {
+      return { success: false, message: err.message || '서버 통신 실패' };
+    }
+  };
 
   const setApiKey = (key: string) => {
     try {
@@ -160,8 +226,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         apiKey,
         selectedModel,
+        isServerConfigured,
+        serverKeyMasked,
+        serverModel,
         setApiKey,
         setSelectedModel,
+        saveServerApiKey,
+        refreshServerStatus,
         login,
         logout,
         upgradeToPro,
@@ -178,4 +249,3 @@ export const useAuth = () => {
   if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 };
-

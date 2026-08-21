@@ -1,49 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
+import { runNvidiaChatCompletion } from '@/lib/nvidiaClient';
+import { getServerNvidiaApiKey, getServerSelectedModel } from '@/lib/serverConfig';
 
 export async function POST(req: NextRequest) {
   try {
-    const { question, termText, termTitle, nvidiaApiKey } = await req.json();
+    const { question, termText, termTitle, nvidiaApiKey, model } = await req.json();
 
     if (!question || !termText) {
       return NextResponse.json({ error: '질문과 약관 본문이 필요합니다.' }, { status: 400 });
     }
 
-    // 1. Try NVIDIA NIM if provided
-    if (nvidiaApiKey && typeof nvidiaApiKey === 'string' && nvidiaApiKey.trim().length > 5) {
+    const effectiveKey = nvidiaApiKey || getServerNvidiaApiKey();
+    const effectiveModel = model || getServerSelectedModel() || 'z-ai/glm-5.2';
+
+    // 1. Try NVIDIA NIM (GLM 5.2 / Thinking support) if key exists
+    if (effectiveKey && typeof effectiveKey === 'string' && effectiveKey.trim().length > 5) {
       try {
-        const res = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${nvidiaApiKey.trim()}`
-          },
-          body: JSON.stringify({
-            model: 'meta/llama-3.1-70b-instruct',
-            messages: [
-              {
-                role: 'system',
-                content: '당신은 대한민국 개인정보 약관 전문 법률 AI 상담원입니다. 약관 본문을 근거로 사용자의 질문에 친절하고 명확하게 한국어로 답변하세요. 불리하거나 주의할 점이 있다면 짚어주세요.'
-              },
-              {
-                role: 'user',
-                content: `[약관 명칭]: ${termTitle || '약관'}\n[약관 본문]:\n${termText}\n\n[사용자 질문]:\n${question}`
-              }
-            ],
-            temperature: 0.3,
-            max_tokens: 1000
-          })
+        const { answer, reasoning } = await runNvidiaChatCompletion({
+          termTitle,
+          termText,
+          question,
+          customApiKey: effectiveKey,
+          customModel: effectiveModel
         });
 
-        if (res.ok) {
-          const json = await res.json();
-          const answer = json.choices?.[0]?.message?.content;
-          if (answer) {
-            return NextResponse.json({ answer, source: 'NVIDIA NIM' });
-          }
+        if (answer) {
+          return NextResponse.json({
+            answer,
+            source: `NVIDIA NIM (${effectiveModel})`,
+            reasoning
+          });
         }
       } catch (err) {
-        console.warn('NVIDIA NIM Q&A failed, falling back:', err);
+        console.warn('NVIDIA NIM GLM-5.2 Q&A failed, falling back:', err);
       }
     }
 

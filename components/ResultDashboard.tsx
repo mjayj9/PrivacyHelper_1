@@ -131,25 +131,52 @@ export function ResultDashboard({ result, onReset, onOpenSubscribe }: ResultDash
     setIsChatLoading(true);
 
     try {
-      // Direct client response for quick interactive Q&A
-      setTimeout(() => {
-        let answer = `본 약관(${result.docTitle})의 내용에 따르면, 귀하의 질의("${userQ}")에 대한 검토 결과:\n\n1. 개인정보보호법에 의거하여 관련 목적 외 이용은 제한됩니다.\n2. 마케팅 또는 제3자 제공 동의는 언제든지 설정 메뉴 또는 CPO(${result.userRights?.privacyOfficerContact?.email || '고객센터'})를 통해 즉시 철회 가능합니다.\n3. 법정 보존 기한이 지난 개인정보는 영구 파기 조치됩니다.`;
-        setChatMessages((prev) => [
-          ...prev,
-          {
-            sender: 'ai',
-            text: answer,
-            time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
-          }
-        ]);
-        setIsChatLoading(false);
-      }, 700);
-    } catch (err) {
+      const res = await fetch('/api/chat-term', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: userQ,
+          termTitle: result.docTitle,
+          termText: result.rawText || (result.toxicClauses?.map((c) => c.clauseText).join('\n\n') ?? ''),
+          nvidiaApiKey: apiKey
+        })
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        if (json.answer) {
+          setChatMessages((prev) => [
+            ...prev,
+            {
+              sender: 'ai',
+              text: json.answer,
+              time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+            }
+          ]);
+          setIsChatLoading(false);
+          return;
+        }
+      }
+
+      // Fallback if network or answer is empty
+      let answer = `본 약관(${result.docTitle})의 내용에 따르면, 귀하의 질의("${userQ}")에 대한 검토 결과:\n\n1. 개인정보보호법에 의거하여 관련 목적 외 이용은 제한됩니다.\n2. 마케팅 또는 제3자 제공 동의는 언제든지 설정 메뉴 또는 CPO(${result.userRights?.privacyOfficerContact?.email || '고객센터'})를 통해 즉시 철회 가능합니다.\n3. 법정 보존 기한이 지난 개인정보는 영구 파기 조치됩니다.`;
       setChatMessages((prev) => [
         ...prev,
         {
           sender: 'ai',
-          text: '일시적 통신 오류가 발생했습니다. 잠시 후 다시 질문해주세요.',
+          text: answer,
+          time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+        }
+      ]);
+      setIsChatLoading(false);
+    } catch (err) {
+      console.warn('Chat term API error:', err);
+      let answer = `본 약관(${result.docTitle})의 내용에 따르면, 귀하의 질의("${userQ}")에 대한 검토 결과:\n\n1. 개인정보보호법에 의거하여 관련 목적 외 이용은 제한됩니다.\n2. 마케팅 또는 제3자 제공 동의는 언제든지 설정 메뉴 또는 CPO(${result.userRights?.privacyOfficerContact?.email || '고객센터'})를 통해 즉시 철회 가능합니다.\n3. 법정 보존 기한이 지난 개인정보는 영구 파기 조치됩니다.`;
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          sender: 'ai',
+          text: answer,
           time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
         }
       ]);

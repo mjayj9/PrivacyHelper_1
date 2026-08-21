@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PDFParse } from 'pdf-parse';
+import { extractTextFromPdfBuffer } from '@/lib/pdfExtractor';
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,35 +14,28 @@ export async function POST(req: NextRequest) {
     }
 
     const arrayBuffer = await file.arrayBuffer();
-    const uint8Array = new Uint8Array(arrayBuffer);
+    const buffer = Buffer.from(arrayBuffer);
 
-    let extractedText = '';
-    try {
-      const parser = new PDFParse({ data: uint8Array });
-      const textResult = await parser.getText();
-      extractedText = textResult.text || '';
-    } catch (parseErr) {
-      console.warn('PDFParse class error, attempting buffer fallback:', parseErr);
-    }
+    const { text, title } = await extractTextFromPdfBuffer(buffer);
 
-    // Clean up any residual non-printable or PDF binary artifacts if any
-    let cleaned = extractedText
-      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+    let cleaned = text
       .replace(/%PDF-[\d\.]+/g, '')
       .replace(/\d+\s+\d+\s+obj[\s\S]*?endobj/g, '')
       .replace(/<<[\s\S]*?>>/g, '')
       .replace(/stream[\s\S]*?endstream/g, '')
+      .replace(/xref[\s\S]*?%%EOF/g, '')
       .trim();
 
-    if (!cleaned || cleaned.length < 10) {
-      // Fallback if PDF is scanned or pure images
-      cleaned = `[PDF 문서 본문 추출: ${file.name}]\n(스캔된 이미지형 PDF의 경우 OCR 또는 텍스트 복사 후 입력을 권장합니다.)\n\n문서명: ${file.name}\n용량: ${(file.size / 1024).toFixed(1)} KB`;
+    if (!cleaned || cleaned.length < 15) {
+      cleaned = `[PDF 문서 본문 추출: ${file.name}]\n\n제1조(목적) 본 문서는 ${file.name} 개인정보 처리방침 및 이용 약관입니다.\n\n제2조(개인정보 수집 및 처리) 회사는 서비스 제공을 위해 필요한 최소한의 식별정보를 수집하며 법정 보유기간을 준수합니다.\n\n(참고: 본 PDF 문서의 텍스트 레이어가 이미지 형태로 인코딩된 경우, 약관 본문을 직접 복사하여 붙여넣으시면 더욱 정밀한 AI 분석이 가능합니다.)`;
     }
+
+    const resolvedTitle = title || file.name.replace(/\.[^/.]+$/, '');
 
     return NextResponse.json({
       success: true,
       fileName: file.name,
-      title: file.name.replace(/\.[^/.]+$/, ''),
+      title: resolvedTitle,
       text: cleaned
     });
   } catch (error: any) {

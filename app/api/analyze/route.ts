@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { MOCK_ANALYSIS_RESULT } from '@/lib/mockData';
 import { AnalysisResult } from '@/types/privacy';
-import { PDFParse } from 'pdf-parse';
+import { extractTextFromPdfBuffer } from '@/lib/pdfExtractor';
+import { runNvidiaAnalysisCompletion } from '@/lib/nvidiaClient';
+import { getServerNvidiaApiKey, getServerSelectedModel } from '@/lib/serverConfig';
 
 const SYSTEM_PROMPT = `
 You are '개약풀 AI' (PrivacyHelper AI), a top-tier legal compliance expert specializing in South Korea's Personal Information Protection Act (개인정보보호법, PIPA) and KISA guidelines.
@@ -95,18 +97,18 @@ export async function POST(req: NextRequest) {
       if (file) {
         docTitle = file.name.replace(/\.[^/.]+$/, '');
         const arrayBuf = await file.arrayBuffer();
-        const uint8 = new Uint8Array(arrayBuf);
+        const buffer = Buffer.from(arrayBuf);
         if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
           try {
-            const parser = new PDFParse({ data: uint8 });
-            const textRes = await parser.getText();
-            targetText = textRes.text || '';
+            const { text, title } = await extractTextFromPdfBuffer(buffer);
+            targetText = text || '';
+            if (title) docTitle = title;
           } catch (pdfErr) {
             console.warn('PDF Parse error, fallback to string conversion:', pdfErr);
-            targetText = Buffer.from(arrayBuf).toString('utf-8');
+            targetText = buffer.toString('utf-8');
           }
         } else {
-          targetText = Buffer.from(arrayBuf).toString('utf-8');
+          targetText = buffer.toString('utf-8');
         }
       } else if (textFromForm) {
         targetText = textFromForm;
@@ -144,8 +146,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // If no NVIDIA NIM API Key provided, return high-accuracy tailored Mock data
-    if (!customApiKey) {
+    const effectiveKey = customApiKey || getServerNvidiaApiKey();
+    const effectiveModel = getServerSelectedModel();
+
+    // If no NVIDIA NIM API Key provided or configured on server, return tailored Mock data
+    if (!effectiveKey) {
       const nowStr = new Date().toLocaleDateString('ko-KR', {
         year: 'numeric',
         month: 'long',
@@ -161,42 +166,28 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, data: mockResult });
     }
 
-    // Call NVIDIA NIM API (Llama-3.1-70b-instruct)
+    // Call NVIDIA NIM API with GLM 5.2 / Thinking support
     try {
-      const response = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${customApiKey}`
-        },
-        body: JSON.stringify({
-          model: 'meta/llama-3.1-70b-instruct',
-          messages: [
-            { role: 'system', content: SYSTEM_PROMPT },
-            {
-              role: 'user',
-              content: `[문서 제목]: ${docTitle}\n\n[분석할 약관 원문]:\n${targetText.slice(0, 12000)}`
-            }
-          ],
-          temperature: 0.1,
-          max_tokens: 3500
-        })
+      const { content, reasoning } = await runNvidiaAnalysisCompletion({
+        systemPrompt: SYSTEM_PROMPT,
+        userPrompt: `[문서 제목]: ${docTitle}\n\n[분석할 약관 원문]:\n${targetText.slice(0, 15000)}`,
+        customApiKey: effectiveKey,
+        customModel: effectiveModel
       });
 
-      if (!response.ok) {
-        console.warn('NVIDIA API Response Not OK, falling back to mock data:', response.status);
-        const fallback = {
-          ...MOCK_ANALYSIS_RESULT,
-          id: 'analysis_' + Date.now(),
-          docTitle,
-          rawText: targetText
-        };
-        return NextResponse.json({ success: true, data: fallback });
+      let cleanJson = content.trim();
+      if (cleanJson.includes('```json')) {
+        cleanJson = cleanJson.split('```json')[1].split('```')[0].trim();
+      } else if (cleanJson.includes('```')) {
+        cleanJson = cleanJson.split('```')[1].split('```')[0].trim();
+      } else {
+        const firstBrace = cleanJson.indexOf('{');
+        const lastBrace = cleanJson.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+          cleanJson = cleanJson.substring(firstBrace, lastBrace + 1).trim();
+        }
       }
 
-      const jsonRes = await response.json();
-      const content = jsonRes.choices?.[0]?.message?.content || '';
-      const cleanJson = content.replace(/```json/g, '').replace(/```/g, '').trim();
       const parsedData = JSON.parse(cleanJson);
 
       const finalResult: AnalysisResult = {
@@ -223,9 +214,9 @@ export async function POST(req: NextRequest) {
         rawText: targetText
       };
 
-      return NextResponse.json({ success: true, data: finalResult });
+      return NextResponse.json({ success: true, data: finalResult, model: effectiveModel, reasoning });
     } catch (apiErr) {
-      console.warn('NVIDIA NIM API Call failed, falling back to mock:', apiErr);
+      console.warn('NVIDIA NIM GLM-5.2 API Call failed, falling back to mock:', apiErr);
       const fallback = {
         ...MOCK_ANALYSIS_RESULT,
         id: 'analysis_' + Date.now(),

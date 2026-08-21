@@ -19,7 +19,7 @@ export function Navbar({
   onOpenSubscribe,
   onResetToHome
 }: NavbarProps) {
-  const { user, apiKey, logout, login, isProOrAdmin } = useAuth();
+  const { user, apiKey, logout, login, isProOrAdmin, isServerConfigured, serverModel } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
 
@@ -90,15 +90,17 @@ export function Navbar({
             id="btn-nav-apikey"
             onClick={onOpenApiKey}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all border ${
-              apiKey
+              isServerConfigured || apiKey
                 ? 'bg-[#EBF8F0] text-[#2F855A] border-[#C6F6D5] hover:bg-[#E2F6E9]'
                 : 'bg-white text-[#4A5568] border-[#E2E8F0] hover:bg-[#F7FAFC] shadow-2xs'
             }`}
-            title="NVIDIA NIM API Key 및 모델 설정"
+            title="NVIDIA NIM API Key 및 서버 GLM-5.2 모델 설정"
           >
             <Key className="w-3.5 h-3.5 text-[#4A7C59]" />
-            <span className="hidden sm:inline">{apiKey ? 'NVIDIA Key 활성' : 'API Key 설정'}</span>
-            {apiKey && <span className="w-1.5 h-1.5 rounded-full bg-[#38A169]"></span>}
+            <span className="hidden sm:inline">
+              {isServerConfigured ? '서버 GLM 5.2 활성' : apiKey ? 'NVIDIA Key 활성' : 'API Key 설정'}
+            </span>
+            {(isServerConfigured || apiKey) && <span className="w-1.5 h-1.5 rounded-full bg-[#38A169]"></span>}
           </button>
 
           {/* Notification Bell */}
