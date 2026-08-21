@@ -3,7 +3,7 @@ import { AnalysisResult } from '@/types/privacy';
 export const MOCK_ANALYSIS_RESULT: AnalysisResult = {
   id: 'analysis_sample_coupang',
   docTitle: '종합 커머스 & 멤버십 개인정보 처리방침',
-  analyzedAt: new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' }),
+  analyzedAt: '2026년 8월 20일',
   safetyScore: 62,
   riskLevel: '주의',
   summary3Lines: [
@@ -82,7 +82,7 @@ export const MOCK_ANALYSIS_RESULT: AnalysisResult = {
 2. 근거 법령: 개인정보보호법 제37조 제1항 및 제38조 제1항
 본 요청 접수일로부터 10일 이내에 조치 결과를 상기 이메일로 회신하여 주시기 바랍니다.
 
-2026년 ${new Date().getMonth() + 1}월 ${new Date().getDate()}일
+2026년 8월 20일
 신청인: 홍길동 (서명 또는 날인)`
   },
   proMetrics: {

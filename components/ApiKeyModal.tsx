@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Key, X, Check, ExternalLink, Shield } from 'lucide-react';
+import { Key, X, Check, ExternalLink, Shield, Sparkles, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 interface ApiKeyModalProps {
@@ -10,7 +10,7 @@ interface ApiKeyModalProps {
 }
 
 export function ApiKeyModal({ isOpen, onClose }: ApiKeyModalProps) {
-  const { apiKey, setApiKey, selectedModel, setSelectedModel } = useAuth();
+  const { apiKey, setApiKey, selectedModel, setSelectedModel, user } = useAuth();
   const [keyInput, setKeyInput] = useState(apiKey || '');
   const [modelInput, setModelInput] = useState(selectedModel || 'meta/llama-3.1-70b-instruct');
   const [savedSuccess, setSavedSuccess] = useState(false);
@@ -43,9 +43,9 @@ export function ApiKeyModal({ isOpen, onClose }: ApiKeyModalProps) {
             </div>
             <div>
               <h3 className="font-extrabold text-base sm:text-lg text-[#1A202C]">
-                NVIDIA NIM API Key 설정
+                NVIDIA NIM API Key & PRO 추론 설정
               </h3>
-              <p className="text-xs text-[#718096]">개인 브라우저 로컬 스토리지에 안전하게 저장됩니다</p>
+              <p className="text-xs text-[#718096]">개인 브라우저 로컬 스토리지에 안전하게 보관됩니다</p>
             </div>
           </div>
           <button
@@ -57,12 +57,29 @@ export function ApiKeyModal({ isOpen, onClose }: ApiKeyModalProps) {
           </button>
         </div>
 
-        <form onSubmit={handleSave} className="mt-5 space-y-4">
+        {/* PRO & Key Relationship Info Badge */}
+        <div className="mt-4 p-3 rounded-2xl bg-gradient-to-r from-[#F0FDF4] to-[#F5FAF6] border border-[#C6F6D5] text-xs">
+          <div className="flex items-center gap-1.5 font-bold text-[#2F855A] mb-1">
+            <Sparkles className="w-4 h-4 text-[#38A169]" />
+            <span>NVIDIA NIM 실시간 추론 & PRO 기능 작동 원리</span>
+          </div>
+          <p className="text-[#4A5568] text-[11px] leading-relaxed">
+            관리자 또는 사용자가 여기에 발급받은 <strong>NVIDIA NIM API Key</strong>를 입력하면, 
+            <strong> Llama 3.1 70B Instruct</strong> 파운데이션 모델을 통해 실시간 약관 심층 분석 및 PRO 전용 KISA 표준 Diff Checker가 즉시 정상 연동되어 작동합니다.
+          </p>
+        </div>
+
+        <form onSubmit={handleSave} className="mt-4 space-y-4">
           {/* API Key Input */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label htmlFor="input-nvidia-key" className="text-xs font-bold text-[#2D3748]">
-                NVIDIA API Key
+              <label htmlFor="input-nvidia-key" className="text-xs font-bold text-[#2D3748] flex items-center gap-1">
+                <span>NVIDIA API Key</span>
+                {apiKey && (
+                  <span className="text-[10px] text-[#2F855A] bg-[#DEF7EC] px-1.5 py-0.2 rounded font-semibold">
+                    현재 등록됨
+                  </span>
+                )}
               </label>
               <a
                 href="https://build.nvidia.com"
@@ -70,7 +87,7 @@ export function ApiKeyModal({ isOpen, onClose }: ApiKeyModalProps) {
                 rel="noreferrer"
                 className="text-[11px] font-semibold text-[#4A7C59] hover:underline inline-flex items-center gap-1"
               >
-                <span>NVIDIA NIM 키 발급받기</span>
+                <span>NVIDIA NIM 무료 키 발급</span>
                 <ExternalLink className="w-3 h-3" />
               </a>
             </div>
@@ -83,7 +100,7 @@ export function ApiKeyModal({ isOpen, onClose }: ApiKeyModalProps) {
               className="w-full px-3.5 py-2.5 rounded-xl bg-[#F8F9FA] border border-[#E2E8F0] text-xs font-mono text-[#1A202C] focus:outline-none focus:ring-2 focus:ring-[#4A7C59]/30 focus:border-[#4A7C59]"
             />
             <p className="text-[11px] text-[#718096] mt-1.5 leading-relaxed">
-              * 키를 입력하지 않아도 서비스 내장 고정밀 법률 AI 룰 엔진을 통해 안정적으로 분석됩니다.
+              * 키가 없어도 서비스 내장 고정밀 법률 AI 룰 엔진(KISA 가이드라인)을 통해 안정적으로 데모 분석을 체험하실 수 있습니다.
             </p>
           </div>
 
@@ -98,7 +115,7 @@ export function ApiKeyModal({ isOpen, onClose }: ApiKeyModalProps) {
               onChange={(e) => setModelInput(e.target.value)}
               className="w-full px-3.5 py-2.5 rounded-xl bg-[#F8F9FA] border border-[#E2E8F0] text-xs font-medium text-[#1A202C] focus:outline-none focus:ring-2 focus:ring-[#4A7C59]/30"
             >
-              <option value="meta/llama-3.1-70b-instruct">meta/llama-3.1-70b-instruct (권장 • 고성능 법률 추론)</option>
+              <option value="meta/llama-3.1-70b-instruct">meta/llama-3.1-70b-instruct (권장 • 최고 성능 법률 추론)</option>
               <option value="meta/llama-3.1-8b-instruct">meta/llama-3.1-8b-instruct (초고속 경량)</option>
               <option value="mistralai/mixtral-8x7b-instruct-v0.1">mistralai/mixtral-8x7b-instruct</option>
             </select>
@@ -144,7 +161,7 @@ export function ApiKeyModal({ isOpen, onClose }: ApiKeyModalProps) {
                 type="submit"
                 className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-[#4A7C59] hover:bg-[#3B6548] transition-all flex items-center gap-1.5 shadow-xs"
               >
-                {savedSuccess ? <Check className="w-4 h-4" /> : <Key className="w-3.5 h-3.5" />}
+                {savedSuccess ? <Check className="w-4 h-4" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
                 <span>{savedSuccess ? '저장 완료!' : '설정 저장'}</span>
               </button>
             </div>

@@ -1,27 +1,44 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
-import { Sparkles, UploadCloud, FileText, Zap, Trash2, ArrowRight, ShieldCheck, Check, AlertCircle } from 'lucide-react';
-import { SAMPLE_TERMS_PRESETS } from '@/lib/sample-data';
+import {
+  Sparkles,
+  UploadCloud,
+  Zap,
+  Trash2,
+  ArrowRight,
+  ShieldCheck,
+  Key,
+  Info,
+  CheckCircle2,
+  Scale,
+  Loader2,
+  FileText
+} from 'lucide-react';
+import { SAMPLE_TERMS_PRESETS, SamplePresetItem } from '@/lib/sample-data';
+import { useAuth } from '@/context/AuthContext';
 
 interface HeroInputProps {
   onAnalyze: (text: string, title?: string, fileName?: string) => void;
   isLoading: boolean;
+  onOpenApiKey?: () => void;
 }
 
-export function HeroInput({ onAnalyze, isLoading }: HeroInputProps) {
+export function HeroInput({ onAnalyze, isLoading, onOpenApiKey }: HeroInputProps) {
+  const { apiKey, selectedModel, isProOrAdmin } = useAuth();
   const [inputText, setInputText] = useState('');
   const [termTitle, setTermTitle] = useState('');
   const [selectedFile, setSelectedFile] = useState<{ name: string; size: string } | null>(null);
   const [dragActive, setDragActive] = useState(false);
-  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
+  const [isParsingPdf, setIsParsingPdf] = useState(false);
+  const [selectedPreset, setSelectedPreset] = useState<SamplePresetItem | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const charCount = inputText.length;
   const wordCount = inputText.trim() ? inputText.trim().split(/\s+/).length : 0;
 
-  const handlePresetSelect = (preset: typeof SAMPLE_TERMS_PRESETS[0]) => {
-    setSelectedPresetId(preset.id);
+  const handlePresetSelect = (preset: SamplePresetItem) => {
+    setSelectedPreset(preset);
     setInputText(preset.text);
     setTermTitle(preset.title);
     setSelectedFile(null);
@@ -31,11 +48,11 @@ export function HeroInput({ onAnalyze, isLoading }: HeroInputProps) {
     setInputText('');
     setTermTitle('');
     setSelectedFile(null);
-    setSelectedPresetId(null);
+    setSelectedPreset(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const processFile = (file: File) => {
+  const processFile = async (file: File) => {
     const isTxt = file.type === 'text/plain' || file.name.endsWith('.txt');
     const isPdf = file.type === 'application/pdf' || file.name.endsWith('.pdf');
 
@@ -47,26 +64,51 @@ export function HeroInput({ onAnalyze, isLoading }: HeroInputProps) {
     const fileSizeStr = (file.size / 1024).toFixed(1) + ' KB';
     setSelectedFile({ name: file.name, size: fileSizeStr });
     setTermTitle(file.name.replace(/\.[^/.]+$/, ''));
-    setSelectedPresetId(null);
+    setSelectedPreset(null);
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const content = e.target?.result as string;
-      if (content) {
-        // If it's a PDF text stream or plain text
-        if (isPdf) {
-          // Extract basic clean text or placeholder header for PDF
-          const cleanText = content.length > 20 ? content : `[PDF 추출 문서]: ${file.name}\n\n제1조(목적) 본 약관은 회사가 제공하는 제반 서비스의 이용조건 및 절차, 회사와 회원 간의 권리, 의무 및 책임사항을 규정함을 목적으로 합니다.\n\n제2조(개인정보 수집 및 마케팅 동의) 회사는 서비스 제공 및 맞춤형 광고를 위해 식별정보와 위치정보를 수집하며 제휴사에 위탁할 수 있습니다.`;
-          setInputText(cleanText);
-        } else {
+    if (isPdf) {
+      setIsParsingPdf(true);
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch('/api/parse-pdf', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.error || 'PDF 텍스트 추출에 실패했습니다.');
+        }
+
+        const data = await response.json();
+        if (data.text) {
+          setInputText(data.text);
+          if (data.title) {
+            setTermTitle(data.title);
+          }
+        }
+      } catch (err: any) {
+        console.error('PDF extraction failed:', err);
+        alert(`PDF 텍스트 추출 중 문제가 발생했습니다: ${err.message || err}`);
+      } finally {
+        setIsParsingPdf(false);
+      }
+    } else {
+      // Plain text file
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const content = e.target?.result as string;
+        if (content) {
           setInputText(content);
         }
-      }
-    };
-    reader.onerror = () => {
-      alert('파일을 읽는 중 오류가 발생했습니다.');
-    };
-    reader.readAsText(file);
+      };
+      reader.onerror = () => {
+        alert('파일을 읽는 중 오류가 발생했습니다.');
+      };
+      reader.readAsText(file, 'utf-8');
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -95,8 +137,12 @@ export function HeroInput({ onAnalyze, isLoading }: HeroInputProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isParsingPdf) {
+      alert('PDF 텍스트 추출이 진행 중입니다. 잠시만 기다려주세요.');
+      return;
+    }
     if (!inputText.trim()) {
-      alert('약관 텍스트를 입력하거나 파일을 업로드해주세요.');
+      alert('약관 텍스트를 입력하거나 빠른 테스트 샘플을 선택해주세요.');
       return;
     }
     onAnalyze(inputText, termTitle || '약관 분석 리포트', selectedFile?.name);
@@ -105,10 +151,10 @@ export function HeroInput({ onAnalyze, isLoading }: HeroInputProps) {
   return (
     <section className="relative pt-6 pb-12 sm:pt-10 sm:pb-16 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto">
       {/* Hero Headline */}
-      <div className="text-center mb-8 sm:mb-10">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#EBF4EE] border border-[#D2E7D9] text-[#3B6548] text-xs font-semibold mb-4 shadow-2xs">
+      <div className="text-center mb-6 sm:mb-8">
+        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#EBF4EE] border border-[#D2E7D9] text-[#3B6548] text-xs font-semibold mb-3 shadow-2xs">
           <ShieldCheck className="w-4 h-4 text-[#4A7C59]" />
-          <span>NVIDIA NIM & AI 기반 약관 투명성 검증 엔진</span>
+          <span>NVIDIA NIM & 법률 AI 기반 약관 투명성 검증 솔루션</span>
         </div>
         <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-[#1A202C] tracking-tight leading-tight">
           읽기 힘든 긴 약관,{' '}
@@ -117,29 +163,147 @@ export function HeroInput({ onAnalyze, isLoading }: HeroInputProps) {
           </span>
           과 독소 조항 탐지
         </h1>
-        <p className="mt-3.5 text-base sm:text-lg text-[#5A6A7E] max-w-2xl mx-auto leading-relaxed">
+        <p className="mt-3 text-base sm:text-lg text-[#5A6A7E] max-w-2xl mx-auto leading-relaxed">
           숨겨진 마케팅 강제 동의, 불리한 면책 조항, 해외 데이터 전송까지! AI가 꼼꼼히 짚어드립니다.
         </p>
+      </div>
 
-        {/* Preset Quick Chips */}
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
-          <span className="text-xs font-medium text-[#718096] mr-1">빠른 테스트 샘플:</span>
-          {SAMPLE_TERMS_PRESETS.map((preset) => (
-            <button
-              key={preset.id}
-              id={`btn-preset-${preset.id}`}
-              type="button"
-              onClick={() => handlePresetSelect(preset)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border ${
-                selectedPresetId === preset.id
-                  ? 'bg-[#4A7C59] text-white border-[#4A7C59] shadow-xs'
-                  : 'bg-white text-[#4A5568] border-[#E2E8F0] hover:border-[#CBD5E0] hover:bg-[#F8F9FA]'
-              }`}
-            >
-              {preset.name}
-            </button>
-          ))}
+      {/* Prominent NVIDIA API Key & Engine Notice Card */}
+      <div className="mb-6 rounded-2xl bg-gradient-to-r from-[#F0FDF4] via-[#F7FBF8] to-[#EDF7F1] border border-[#C6F6D5] p-4 sm:p-5 shadow-2xs">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-xl bg-[#4A7C59] text-white flex items-center justify-center shrink-0 shadow-xs mt-0.5 sm:mt-0">
+              <Key className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-extrabold text-sm text-[#1A202C]">
+                  NVIDIA NIM AI 70B 추론 엔진 연동 안내
+                </span>
+                {apiKey ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-[#DEF7EC] text-[#03543F] border border-[#BCF0DA]">
+                    <CheckCircle2 className="w-3 h-3 text-[#0E9F6E]" />
+                    <span>NVIDIA API Key 연결됨 ({selectedModel.split('/')[1] || 'Llama 3.1 70B'})</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-[#FEF08A]/70 text-[#854D0E] border border-[#FDE047]">
+                    <Sparkles className="w-3 h-3 text-[#CA8A04]" />
+                    <span>NVIDIA Key 입력 시 PRO 70B 실시간 추론 활성화</span>
+                  </span>
+                )}
+                {isProOrAdmin && (
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#805AD5]/15 text-[#6B46C1] border border-[#D6BCFA]">
+                    PRO 멤버십 가동 중
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-[#4A5568] mt-1 leading-relaxed">
+                실제 서비스 분석 및 PRO 정밀 리포트는 <strong>NVIDIA NIM (Llama 3.1 70B Instruct)</strong> 추론 모델을 통해 실시간 수행됩니다.
+                <span className="text-[#718096] block sm:inline sm:ml-1">
+                  (관리자나 사용자가 설정한 NVIDIA 키는 안전하게 암호화 통신에만 사용됩니다.)
+                </span>
+              </p>
+            </div>
+          </div>
+
+          <button
+            id="btn-hero-open-apikey"
+            type="button"
+            onClick={onOpenApiKey}
+            className="w-full sm:w-auto shrink-0 px-4 py-2 rounded-xl text-xs font-bold bg-white text-[#2F855A] border border-[#9AE6B4] hover:bg-[#EBF8F0] transition-all flex items-center justify-center gap-1.5 shadow-2xs hover:shadow-xs"
+          >
+            <Key className="w-3.5 h-3.5 text-[#38A169]" />
+            <span>{apiKey ? 'API 키 변경/확인' : 'NVIDIA Key 등록하기'}</span>
+          </button>
         </div>
+      </div>
+
+      {/* Real-World Case Test Presets */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-1.5">
+            <Scale className="w-4 h-4 text-[#4A7C59]" />
+            <span className="text-xs font-bold text-[#2D3748]">
+              실제 공시 사례 기반 빠른 테스트 샘플 (출처 명시)
+            </span>
+          </div>
+          <span className="text-[11px] text-[#718096] hidden sm:inline">
+            원클릭으로 실제 약관 본문과 법적 쟁점을 불러옵니다
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+          {SAMPLE_TERMS_PRESETS.map((preset) => {
+            const isSelected = selectedPreset?.id === preset.id;
+            return (
+              <button
+                key={preset.id}
+                id={`btn-preset-${preset.id}`}
+                type="button"
+                onClick={() => handlePresetSelect(preset)}
+                className={`p-2.5 rounded-2xl text-left transition-all border flex flex-col justify-between ${
+                  isSelected
+                    ? 'bg-[#EBF8F0] border-[#4A7C59] shadow-xs ring-2 ring-[#4A7C59]/20'
+                    : 'bg-white border-[#E2E8F0] hover:border-[#CBD5E0] hover:bg-[#F8F9FA]'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-1 mb-1">
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#EDF2F7] text-[#4A5568]">
+                    {preset.badge}
+                  </span>
+                  <span
+                    className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded ${
+                      preset.riskBadge === '위험'
+                        ? 'bg-[#FFF5F5] text-[#E05252] border border-[#FED7D7]'
+                        : preset.riskBadge === '주의'
+                        ? 'bg-[#FFFAF0] text-[#DD6B20] border border-[#FEEBC8]'
+                        : 'bg-[#F0FFF4] text-[#38A169] border border-[#C6F6D5]'
+                    }`}
+                  >
+                    {preset.riskBadge}
+                  </span>
+                </div>
+                <h4 className="font-bold text-xs text-[#1A202C] line-clamp-1">
+                  {preset.name.replace(/\[실제사례\]\s*/, '')}
+                </h4>
+                <p className="text-[11px] text-[#718096] line-clamp-1 mt-0.5">
+                  {preset.description}
+                </p>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Selected Preset Source & Legal Detail Info Box */}
+        {selectedPreset && (
+          <div className="mt-2.5 p-3 rounded-xl bg-white border border-[#CBD5E0] shadow-2xs flex items-start gap-2.5 animate-in fade-in duration-150">
+            <Info className="w-4 h-4 text-[#4A7C59] shrink-0 mt-0.5" />
+            <div className="text-xs space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-bold text-[#1A202C]">
+                  📌 선택된 사례 출처:
+                </span>
+                <span className="font-semibold text-[#2F855A] bg-[#EBF8F0] px-2 py-0.5 rounded text-[11px]">
+                  {selectedPreset.source}
+                </span>
+              </div>
+              <p className="text-[#4A5568] leading-relaxed text-[11px]">
+                {selectedPreset.sourceDetail}
+              </p>
+              <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                <span className="text-[10px] font-bold text-[#718096]">주요 쟁점:</span>
+                {selectedPreset.keyIssues.map((issue, idx) => (
+                  <span
+                    key={idx}
+                    className="text-[10px] bg-[#F7FAFC] text-[#4A5568] border border-[#E2E8F0] px-1.5 py-0.2 rounded"
+                  >
+                    #{issue}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Main Input Form Card */}
@@ -167,19 +331,38 @@ export function HeroInput({ onAnalyze, isLoading }: HeroInputProps) {
               value={inputText}
               onChange={(e) => {
                 setInputText(e.target.value);
-                setSelectedPresetId(null);
+                setSelectedPreset(null);
               }}
               rows={8}
-              placeholder="분석할 개인정보 처리방침, 이용약관, 회원가입 동의문 텍스트를 여기에 복사하여 붙여넣으세요... (또는 하단 파일 업로드)"
-              className="w-full p-4 rounded-2xl bg-[#FAFAF9] border border-[#E2E8F0] text-sm text-[#2D3748] placeholder-[#A0AEC0] focus:outline-none focus:ring-2 focus:ring-[#4A7C59]/30 focus:border-[#4A7C59] transition-all resize-y leading-relaxed font-sans"
+              disabled={isParsingPdf}
+              placeholder={
+                isParsingPdf
+                  ? 'PDF 문서에서 텍스트를 추출하는 중입니다... 잠시만 기다려주세요.'
+                  : '분석할 개인정보 처리방침, 이용약관, 회원가입 동의문 텍스트를 여기에 복사하여 붙여넣으세요... (또는 상단 실제사례 샘플 클릭)'
+              }
+              className={`w-full p-4 rounded-2xl border text-sm text-[#2D3748] placeholder-[#A0AEC0] focus:outline-none focus:ring-2 focus:ring-[#4A7C59]/30 focus:border-[#4A7C59] transition-all resize-y leading-relaxed font-sans ${
+                isParsingPdf ? 'bg-[#F0FDF4] border-[#86EFAC]' : 'bg-[#FAFAF9] border-[#E2E8F0]'
+              }`}
             />
 
+            {/* Parsing spinner overlay if parsing PDF */}
+            {isParsingPdf && (
+              <div className="absolute inset-0 bg-white/80 backdrop-blur-2xs rounded-2xl flex flex-col items-center justify-center gap-2">
+                <Loader2 className="w-7 h-7 text-[#4A7C59] animate-spin" />
+                <span className="text-xs font-bold text-[#2F855A]">
+                  PDF 문서 본문 텍스트를 깨짐 없이 추출하는 중...
+                </span>
+              </div>
+            )}
+
             {/* Character & Word Count Indicator */}
-            <div className="absolute right-3 bottom-3 flex items-center gap-2 bg-white/90 backdrop-blur-xs px-2.5 py-1 rounded-lg border border-[#E2E8F0] text-[11px] text-[#718096]">
-              <span>{charCount.toLocaleString()} 자</span>
-              <span className="text-[#CBD5E0]">|</span>
-              <span>약 {wordCount} 단어</span>
-            </div>
+            {!isParsingPdf && (
+              <div className="absolute right-3 bottom-3 flex items-center gap-2 bg-white/90 backdrop-blur-xs px-2.5 py-1 rounded-lg border border-[#E2E8F0] text-[11px] text-[#718096]">
+                <span>{charCount.toLocaleString()} 자</span>
+                <span className="text-[#CBD5E0]">|</span>
+                <span>약 {wordCount} 단어</span>
+              </div>
+            )}
           </div>
 
           {/* Drag and Drop / File Attachment Area */}
@@ -189,10 +372,14 @@ export function HeroInput({ onAnalyze, isLoading }: HeroInputProps) {
               onDragLeave={handleDrag}
               onDragOver={handleDrag}
               onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => {
+                if (!isParsingPdf) fileInputRef.current?.click();
+              }}
               className={`flex-1 w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2.5 px-4 py-2.5 rounded-xl border border-dashed cursor-pointer transition-all ${
                 dragActive
                   ? 'border-[#4A7C59] bg-[#EBF8F0]'
+                  : isParsingPdf
+                  ? 'border-[#86EFAC] bg-[#F0FDF4]'
                   : selectedFile
                   ? 'border-[#C6F6D5] bg-[#F0FFF4]'
                   : 'border-[#CBD5E0] bg-[#F8F9FA] hover:bg-[#F0F2F1]'
@@ -201,20 +388,30 @@ export function HeroInput({ onAnalyze, isLoading }: HeroInputProps) {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".txt,.pdf"
+                accept=".txt,.pdf,application/pdf,text/plain"
                 onChange={handleFileChange}
                 className="hidden"
                 id="file-upload-input"
               />
-              <UploadCloud className="w-4 h-4 text-[#4A7C59]" />
+              {isParsingPdf ? (
+                <Loader2 className="w-4 h-4 text-[#4A7C59] animate-spin" />
+              ) : selectedFile ? (
+                <FileText className="w-4 h-4 text-[#4A7C59]" />
+              ) : (
+                <UploadCloud className="w-4 h-4 text-[#4A7C59]" />
+              )}
               <div className="text-xs text-[#4A5568]">
-                {selectedFile ? (
+                {isParsingPdf ? (
                   <span className="font-semibold text-[#2F855A]">
-                    {selectedFile.name} ({selectedFile.size})
+                    PDF 문서 본문 파싱 중... ({selectedFile?.name})
+                  </span>
+                ) : selectedFile ? (
+                  <span className="font-semibold text-[#2F855A]">
+                    {selectedFile.name} ({selectedFile.size}) - 텍스트 추출 완료
                   </span>
                 ) : (
                   <span>
-                    파일 드래그 앤 드롭 또는 <strong className="text-[#4A7C59] underline">파일 선택</strong> (.txt, .pdf)
+                    PDF/TXT 파일 드래그 앤 드롭 또는 <strong className="text-[#4A7C59] underline">파일 선택</strong> (.pdf, .txt)
                   </span>
                 )}
               </div>
@@ -227,6 +424,7 @@ export function HeroInput({ onAnalyze, isLoading }: HeroInputProps) {
                   id="btn-clear-input"
                   type="button"
                   onClick={handleClear}
+                  disabled={isParsingPdf}
                   className="px-3 py-2.5 rounded-xl border border-[#E2E8F0] text-xs font-semibold text-[#718096] hover:bg-[#FFF5F5] hover:text-[#E05252] hover:border-[#FEB2B2] transition-colors flex items-center justify-center gap-1.5"
                   title="내용 비우기"
                 >
@@ -238,9 +436,9 @@ export function HeroInput({ onAnalyze, isLoading }: HeroInputProps) {
               <button
                 id="btn-submit-analyze"
                 type="submit"
-                disabled={isLoading || !inputText.trim()}
+                disabled={isLoading || isParsingPdf || !inputText.trim()}
                 className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 rounded-2xl text-sm font-bold text-white transition-all shadow-md ${
-                  isLoading || !inputText.trim()
+                  isLoading || isParsingPdf || !inputText.trim()
                     ? 'bg-[#A0AEC0] cursor-not-allowed opacity-70'
                     : 'bg-gradient-to-r from-[#4A7C59] to-[#3B6548] hover:from-[#3B6548] hover:to-[#2D4F38] hover:shadow-lg shadow-[#4A7C59]/25 hover:-translate-y-0.5 active:translate-y-0'
                 }`}

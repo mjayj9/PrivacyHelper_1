@@ -124,7 +124,11 @@ function PrivacyHelperApp() {
         ) : (
           <>
             {/* Hero Input Section */}
-            <HeroInput onAnalyze={handleAnalyze} isLoading={isLoading} />
+            <HeroInput
+              onAnalyze={handleAnalyze}
+              isLoading={isLoading}
+              onOpenApiKey={() => setIsApiKeyModalOpen(true)}
+            />
 
             {/* History Section */}
             <HistorySection onSelectHistory={handleSelectHistory} />

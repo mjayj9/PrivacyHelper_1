@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { MOCK_ANALYSIS_RESULT } from '@/lib/mockData';
 import { AnalysisResult } from '@/types/privacy';
+import { PDFParse } from 'pdf-parse';
 
 const SYSTEM_PROMPT = `
 You are '개약풀 AI' (PrivacyHelper AI), a top-tier legal compliance expert specializing in South Korea's Personal Information Protection Act (개인정보보호법, PIPA) and KISA guidelines.
@@ -94,20 +95,18 @@ export async function POST(req: NextRequest) {
       if (file) {
         docTitle = file.name.replace(/\.[^/.]+$/, '');
         const arrayBuf = await file.arrayBuffer();
-        const buffer = Buffer.from(arrayBuf);
+        const uint8 = new Uint8Array(arrayBuf);
         if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
           try {
-            // Dynamic require pdf-parse for robust server-side execution
-            const pdfParseModule = require('pdf-parse');
-            const pdfParser = pdfParseModule.default || pdfParseModule;
-            const pdfData = await pdfParser(buffer);
-            targetText = pdfData.text;
+            const parser = new PDFParse({ data: uint8 });
+            const textRes = await parser.getText();
+            targetText = textRes.text || '';
           } catch (pdfErr) {
             console.warn('PDF Parse error, fallback to string conversion:', pdfErr);
-            targetText = buffer.toString('utf-8');
+            targetText = Buffer.from(arrayBuf).toString('utf-8');
           }
         } else {
-          targetText = buffer.toString('utf-8');
+          targetText = Buffer.from(arrayBuf).toString('utf-8');
         }
       } else if (textFromForm) {
         targetText = textFromForm;
@@ -118,6 +117,24 @@ export async function POST(req: NextRequest) {
       targetText = body.text || '';
       if (body.title) docTitle = body.title;
       if (body.nvidiaApiKey) customApiKey = body.nvidiaApiKey;
+    }
+
+    // Clean up any raw PDF binary markers if user pasted raw PDF file contents directly
+    if (targetText.includes('%PDF-') || targetText.includes('endobj') || targetText.includes('/Creator (Mozilla')) {
+      // Remove PDF binary structure artifacts
+      const cleaned = targetText
+        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+        .replace(/%PDF-[\d\.]+/g, '')
+        .replace(/\d+\s+\d+\s+obj[\s\S]*?endobj/g, '')
+        .replace(/<<[\s\S]*?>>/g, '')
+        .replace(/stream[\s\S]*?endstream/g, '')
+        .replace(/xref[\s\S]*?%%EOF/g, '')
+        .replace(/trailer[\s\S]*?%%EOF/g, '')
+        .trim();
+
+      if (cleaned.length > 20) {
+        targetText = cleaned;
+      }
     }
 
     if (!targetText || targetText.trim().length === 0) {

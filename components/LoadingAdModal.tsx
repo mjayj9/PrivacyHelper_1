@@ -35,7 +35,6 @@ const SPONSOR_ADS = [
 export function LoadingAdModal({ isOpen, termTitle }: LoadingAdModalProps) {
   const [progress, setProgress] = useState(0);
   const [stepIndex, setStepIndex] = useState(0);
-  const [adIndex] = useState(() => Math.floor(Math.random() * SPONSOR_ADS.length));
 
   const steps = [
     '개인정보보호법(PIPA) 6대 기준 항목 및 수집처 파싱 중...',
@@ -43,6 +42,10 @@ export function LoadingAdModal({ isOpen, termTitle }: LoadingAdModalProps) {
     'KISA 표준 가이드라인 대비 이탈점 및 독소 조항 정밀 검토 중...',
     '3줄 핵심 요약 및 CPO 권리 행사 대응 가이드 생성 중...'
   ];
+
+  // Deterministically select sponsor ad based on title length
+  const adIndex = Math.abs((termTitle?.length || 0) % SPONSOR_ADS.length);
+  const currentAd = SPONSOR_ADS[adIndex] || SPONSOR_ADS[0];
 
   useEffect(() => {
     if (!isOpen) return;
@@ -72,8 +75,6 @@ export function LoadingAdModal({ isOpen, termTitle }: LoadingAdModalProps) {
   }, [isOpen]);
 
   if (!isOpen) return null;
-
-  const currentAd = SPONSOR_ADS[adIndex] || SPONSOR_ADS[0];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs animate-in fade-in duration-200">
